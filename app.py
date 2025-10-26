@@ -2,20 +2,19 @@ import os, re, time, asyncio
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import aiosqlite
 import httpx
 
 DB_PATH = os.getenv("DB_PATH", "data.db")
 POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "10"))
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")  # Bot token
 UPBIT_MARKETS_URL = "https://api.upbit.com/v1/market/all?isDetails=false"
 UPBIT_TICKER_URL = "https://api.upbit.com/v1/ticker?markets={markets}"
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
 app = FastAPI(title="Upbit Alerts (Bot Token, Web only)")
-app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+# ⚠️ static 폴더 마운트 없음 (폴더 없이 루트에 index.html만 둠)
 
 @app.get("/api/health")
 def health():
@@ -96,8 +95,7 @@ async def fetch_upbit_markets() -> List[Dict[str, str]]:
 @app.get("/api/markets")
 async def markets():
   try:
-    out = await fetch_upbit_markets()
-    return out
+    return await fetch_upbit_markets()
   except Exception as e:
     return JSONResponse(status_code=502, content={"ok": False, "msg": f"Upbit fetch failed: {type(e).__name__} {e}"})
 
@@ -216,10 +214,14 @@ async def poller():
 
 @app.get("/")
 def index():
-  return FileResponse("static/index.html")
+  # 루트에 있는 index.html을 그대로 서빙
+  if os.path.exists("index.html"):
+    return FileResponse("index.html")
+  # index.html이 없어도 최소한 살아있게
+  return JSONResponse({"ok": True, "msg": "Upload index.html at repo root."})
 
 @app.on_event("startup")
 async def on_start():
   if not DISCORD_TOKEN:
-    print("[warn] DISCORD_TOKEN not set; API will reject /api/track")
+    print("[warn] DISCORD_TOKEN not set; /api/track will 500")
   asyncio.create_task(poller())
